@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -8,24 +9,30 @@ import (
 	"text/template"
 )
 
-type TemplateHandler struct {
+type templateHandler struct {
 	once     sync.Once
 	filename string
-	temp     *template.Template
+	pattern  *template.Template
 }
 
-func (t *TemplateHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+func (t *templateHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	t.once.Do(func() {
-		t.temp = template.Must(template.ParseFiles(filepath.Join("templates", t.filename)))
+		t.pattern = template.Must(template.ParseFiles(filepath.Join("templates", t.filename)))
 	})
-	err := t.temp.Execute(writer, nil)
+	err := t.pattern.Execute(writer, request)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func main() {
-	http.Handle("/", &TemplateHandler{filename: "base.html"})
+	var url = flag.String("url", ":8080", "App URL")
+	flag.Parse()
+	nc := newChat()
+	http.Handle("/", &templateHandler{filename: "base.html"})
+	http.Handle("/chat", nc)
+	go nc.start()
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("Starting web server on", *url)
+	log.Fatal(http.ListenAndServe(*url, nil))
 }
